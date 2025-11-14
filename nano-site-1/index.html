@@ -1,15 +1,17 @@
 <script>
+    // PHANTOM WALLET CHECK
     function getProvider() {
         if ('solana' in window && window.solana?.isPhantom) {
             return window.solana;
         }
-        throw new Error('Install Phantom Wallet!');
+        alert('Install Phantom Wallet!');
+        throw new Error('No wallet');
     }
 
     const payButton = document.getElementById('payButton');
     const fullContent = document.getElementById('full-content');
 
-    // Reliable devnet RPCs
+    // 3 WORKING RPCs
     const RPC_LIST = [
         'https://solana-devnet.rpc.extrnode.com',
         'https://devnet.solana.fm/api/v1',
@@ -18,19 +20,20 @@
 
     let connection = null;
 
-    async function initConnection() {
+    // CONNECT TO SOLANA
+    async function connectRPC() {
         for (const url of RPC_LIST) {
             try {
-                const conn = new solanaWeb3.Connection(url, 'confirmed');
+                const conn = new solanaWeb3.Connection(url);
                 await conn.getVersion();
                 connection = conn;
-                console.log('RPC Connected:', url);
-                return;
-            } catch (err) {
-                console.warn('RPC Failed:', url);
+                console.log('Connected to:', url);
+                return true;
+            } catch (e) {
+                console.log('Failed:', url);
             }
         }
-        alert('No Solana connection. Try again in 1 min or use mobile data.');
+        return false;
     }
 
     payButton.addEventListener('click', async () => {
@@ -38,52 +41,48 @@
             // 1. Connect wallet
             const provider = getProvider();
             if (!provider.isConnected) {
-                payButton.textContent = 'Connecting wallet...';
+                payButton.textContent = 'Connect Wallet...';
                 await provider.connect();
             }
 
-            // 2. Ensure RPC is ready
+            // 2. Connect RPC
             if (!connection) {
                 payButton.textContent = 'Connecting to Solana...';
                 payButton.disabled = true;
-                await initConnection();
+                const success = await connectRPC();
                 payButton.disabled = false;
-                payButton.textContent = 'Unlock Full Article - 0.002 SOL (~$0.30)';
+                payButton.textContent = 'Unlock Full Article - 0.002 SOL';
+                if (!success) throw new Error('No network');
             }
-            if (!connection) throw new Error('No RPC connection');
 
-            // 3. YOUR WALLET ADDRESS HERE
-            const recipient = new solanaWeb3.PublicKey('Bw2M5DqDsHsNZhGbmyj8WQ9iX55Gk8RPrmxpQj35aUxM');
+            // 3. YOUR WALLET ADDRESS (CHANGE THIS!)
+            const recipient = new solanaWeb3.PublicKey('Bw2M5DqDsHsNZhGbmyj8WQ9iX55Gk8RPrmxpQj35aUxM'); // TEST WALLET
 
             const amount = 0.002 * solanaWeb3.LAMPORTS_PER_SOL;
 
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-
-            const transaction = new solanaWeb3.Transaction({
-                recentBlockhash: blockhash,
-                feePayer: provider.publicKey,
-            }).add(
+            const { blockhash } = await connection.getLatestBlockhash();
+            const tx = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: provider.publicKey,
                     toPubkey: recipient,
                     lamports: amount,
                 })
             );
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = provider.publicKey;
 
-            const { signature } = await provider.signAndSendTransaction(transaction);
-            await connection.confirmTransaction({ signature, lastValidBlockHeight });
+            const { signature } = await provider.signAndSendTransaction(tx);
+            await connection.confirmTransaction(signature);
 
             fullContent.style.display = 'block';
             payButton.style.display = 'none';
-            alert('Payment successful! Article unlocked.');
 
-        } catch (error) {
-            console.error('Error:', error);
-            alert('Failed: ' + (error.message || 'Network error'));
+        } catch (err) {
+            console.error(err);
+            alert('Error: ' + (err.message || 'Try mobile data'));
         }
     });
 
-    // Auto-init on load
-    window.addEventListener('load', initConnection);
+    // Auto-connect RPC on load
+    window.addEventListener('load', connectRPC);
 </script>
-FINAL FIX - RPC + wallet
