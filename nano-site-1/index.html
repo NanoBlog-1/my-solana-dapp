@@ -1,16 +1,15 @@
 <script>
     function getProvider() {
-        if ('solana' in window) {
-            const provider = window.solana;
-            if (provider.isPhantom) return provider;
+        if ('solana' in window && window.solana?.isPhantom) {
+            return window.solana;
         }
-        throw new Error('Phantom wallet not found. Install it!');
+        throw new Error('Install Phantom Wallet!');
     }
 
     const payButton = document.getElementById('payButton');
     const fullContent = document.getElementById('full-content');
 
-    // Auto-fallback RPC list
+    // Reliable devnet RPCs
     const RPC_LIST = [
         'https://solana-devnet.rpc.extrnode.com',
         'https://devnet.solana.fm/api/v1',
@@ -22,34 +21,40 @@
     async function initConnection() {
         for (const url of RPC_LIST) {
             try {
-                const conn = new solanaWeb3.Connection(url);
+                const conn = new solanaWeb3.Connection(url, 'confirmed');
                 await conn.getVersion();
                 connection = conn;
-                console.log('Connected to RPC:', url);
+                console.log('RPC Connected:', url);
                 return;
             } catch (err) {
-                console.warn('RPC failed:', url);
+                console.warn('RPC Failed:', url);
             }
         }
-        alert('All RPCs failed. Try again in 1 minute.');
+        alert('No Solana connection. Try again in 1 min or use mobile data.');
     }
 
     payButton.addEventListener('click', async () => {
         try {
+            // 1. Connect wallet
             const provider = getProvider();
-            if (!provider.isConnected) await provider.connect();
+            if (!provider.isConnected) {
+                payButton.textContent = 'Connecting wallet...';
+                await provider.connect();
+            }
 
-            // Wait for connection
+            // 2. Ensure RPC is ready
             if (!connection) {
-                payButton.disabled = true;
                 payButton.textContent = 'Connecting to Solana...';
+                payButton.disabled = true;
                 await initConnection();
                 payButton.disabled = false;
                 payButton.textContent = 'Unlock Full Article - 0.002 SOL (~$0.30)';
             }
-            if (!connection) return;
+            if (!connection) throw new Error('No RPC connection');
 
-            const recipient = new solanaWeb3.PublicKey('Bw2M5DqDsHsNZhGbmyj8WQ9iX55Gk8RPrmxpQj35aUxM'); // CHANGE THIS
+            // 3. YOUR WALLET ADDRESS HERE
+            const recipient = new solanaWeb3.PublicKey('Bw2M5DqDsHsNZhGbmyj8WQ9iX55Gk8RPrmxpQj35aUxM');
+
             const amount = 0.002 * solanaWeb3.LAMPORTS_PER_SOL;
 
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
@@ -70,12 +75,14 @@
 
             fullContent.style.display = 'block';
             payButton.style.display = 'none';
+            alert('Payment successful! Article unlocked.');
+
         } catch (error) {
-            console.error('Payment failed:', error);
-            alert('Payment failed: ' + error.message);
+            console.error('Error:', error);
+            alert('Failed: ' + (error.message || 'Network error'));
         }
     });
 
-    // Auto-connect on load
+    // Auto-init on load
     window.addEventListener('load', initConnection);
 </script>
